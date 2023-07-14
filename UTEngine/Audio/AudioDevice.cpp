@@ -123,16 +123,16 @@ public:
 		delete musicBuffer;
 	}
 
-	void AudioDevice::AddSound(USound* sound)
+	void AddSound(USound* sound) override
 	{
 		sounds.push_back(sound);
 	}
 
-	void AudioDevice::RemoveSound(USound* sound)
+	void RemoveSound(USound* sound) override
 	{
 	}
 
-	void AudioDevice::PlayMusic(std::unique_ptr<AudioSource> source)
+	void PlayMusic(std::unique_ptr<AudioSource> source) override
 	{
 		playbackMutex.lock();
 		music = std::move(source);
