@@ -40,6 +40,7 @@ public:
 	void Load(ObjectStream* stream) override;
 
 	FontGlyph GetGlyph(char c) const;
+	const std::vector<FontPage>& GetPages() const;
 
 private:
 	FontGlyph FindGlyph(char c) const;

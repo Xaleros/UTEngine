@@ -17,6 +17,7 @@ enum class ExportCommand
 	All,
 	Scripts,
 	Textures,
+	Fonts,
 	Sounds,
 	Music,
 	Meshes,
@@ -37,6 +38,7 @@ static ExportCommand GetCommand(const std::string& command)
 		{"all", ExportCommand::All},
 		{"scripts", ExportCommand::Scripts},
 		{"textures", ExportCommand::Textures},
+		{"fonts", ExportCommand::Fonts},
 		{"sounds", ExportCommand::Sounds},
 		{"music", ExportCommand::Music},
 		{"meshes", ExportCommand::Meshes},
@@ -100,6 +102,9 @@ void ExportCommandlet::OnCommand(DebuggerApp* console, const std::string& args)
 		break;
 	case ExportCommand::Textures:
 		ExportTextures(console, packages);
+		break;
+	case ExportCommand::Fonts:
+		ExportFonts(console, packages);
 		break;
 	case ExportCommand::Sounds:
 		ExportSounds(console, packages);
@@ -280,6 +285,101 @@ void ExportCommandlet::ExportTextures(DebuggerApp* console, std::vector<std::str
 
 				std::string filename = FilePath::combine(texturespath, tex->Name.ToString() + "." + ext);
 				File::write_all_bytes(filename, stream.Data(), stream.Size());
+			}
+		}
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////////
+
+void ExportCommandlet::ExportFonts(DebuggerApp* console, std::vector<std::string>& packages)
+{
+	InitExport(packages);
+
+	if (packages.size() == 0)
+		console->WriteOutput("Checking all packages..." + NewLine());
+
+	// cull out packages without textures
+	std::vector<PackageNamePair> packageObjects;
+	for (std::string pkgname : packageNames)
+	{
+		if (pkgname == "Editor")
+			continue;
+
+		Package* package = engine->packages->GetPackage(pkgname);
+		std::vector<UFont*> objects = package->GetAllObjects<UFont>();
+		if (!objects.empty())
+			packageObjects.push_back(PackageNamePair(package, pkgname));
+	}
+
+	if (packageObjects.size() == 0)
+	{
+		console->WriteOutput("No fonts found" + NewLine());
+		return;
+	}
+
+	// TODO: ini setting which specifies choice automatically?
+	// Ask for texture format
+	console->WriteOutput("Input desired texture format:" + console->NewLine());
+	for (const std::string& format : formats)
+	{
+		console->WriteOutput("\t" + format + console->NewLine());
+	}
+	std::string desiredExt = console->GetInput();
+	std::transform(desiredExt.begin(), desiredExt.end(), desiredExt.begin(), [](unsigned char c) { return tolower(c); });
+
+	bool validExt = false;
+	for (const std::string& format : formats)
+	{
+		if (format.compare(desiredExt))
+		{
+			validExt = true;
+			break;
+		}
+	}
+
+	if (!validExt)
+	{
+		console->WriteOutput("Unknown format " + desiredExt + console->NewLine());
+		return;
+	}
+
+	for (PackageNamePair& pkgobject : packageObjects)
+	{
+		Package* package = pkgobject.first;
+		std::string& name = pkgobject.second;
+
+		std::string pkgname = package->GetPackageName().ToString();
+		std::string pkgpath = FilePath::combine(engine->LaunchInfo.gameRootFolder, name);
+		std::string texturespath = FilePath::combine(pkgpath, "Fonts");
+		bool pkgpathcreated = false;
+
+		console->WriteOutput("Exporting fonts from " + ColorEscape(96) + name + ResetEscape() + NewLine());
+
+		std::vector<UFont*> fonts = package->GetAllObjects<UFont>();
+
+		for (UFont* font : fonts)
+		{
+			MemoryStreamWriter stream = Exporter::ExportFont(font);
+			if (stream.Size() > 0)
+			{
+				if (!pkgpathcreated)
+				{
+					Directory::make_directory(pkgpath);
+					Directory::make_directory(texturespath);
+					pkgpathcreated = true;
+				}
+
+				std::string filename = FilePath::combine(texturespath, font->Name.ToString() + ".ufnt");
+				File::write_all_bytes(filename, stream.Data(), stream.Size());
+
+				const std::vector<FontPage>& pages = font->GetPages();
+				for (const FontPage& page : pages)
+				{
+					MemoryStreamWriter texstream = Exporter::ExportTexture(page.Texture, desiredExt);
+					filename = FilePath::combine(texturespath, page.Texture->Name.ToString() + "." + desiredExt);
+					File::write_all_bytes(filename, texstream.Data(), texstream.Size());
+				}
 			}
 		}
 	}

@@ -1,5 +1,6 @@
 #include "miniz/miniz.h"
 #include "Editor/Export.h"
+#include "Package/Package.h"
 #include "UObject/UProperty.h"
 #include "UObject/UTextBuffer.h"
 
@@ -59,6 +60,44 @@ MemoryStreamWriter Exporter::ExportClass(UClass* cls)
 	text << "\r\ndefaultproperties\r\n{\r\n";
 	text << ExportObject(cls->GetDefaultObject(), 1, false);
 	return text;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+
+MemoryStreamWriter Exporter::ExportFont(UFont* font)
+{
+	MemoryStreamWriter text;
+	
+	const std::vector<FontPage>& pages = font->GetPages();
+	text << "BEGIN OBJECT CLASS=Font\r\n";
+
+	for (const FontPage& page : pages)
+	{
+		text << "\tBEGIN PAGE\r\n";
+		text << "\t\tTexture='" + page.Texture->Name.ToString() + "'\r\n";
+
+		for (int i = 0; i < page.Characters.size(); i++)
+		{
+			const FontCharacter& c = page.Characters[i];
+			int StartU = c.StartU;
+			int StartV = c.StartV;
+			int USize = c.VSize;
+			int VSize = c.USize;
+
+			if (!StartU && !StartV && !USize && !VSize)
+				continue;
+
+			text << "\t\tChar" + std::to_string(i) +  "(StartU=" + std::to_string(StartU) + ",";
+			text << "StartV=" + std::to_string(StartV) + ",";
+			text << "USize=" + std::to_string(USize) + ",";
+			text << "VSize=" + std::to_string(VSize) + ")\r\n";
+		}
+
+		text << "\tEND PAGE\r\n";
+	}
+
+	text << "END OBJECT\r\n";
+	return std::move(text);
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -262,7 +301,7 @@ MemoryStreamWriter Exporter::ExportIceTexture(UIceTexture* tex)
 
 /////////////////////////////////////////////////////////////////////////////
 
-struct BmpHeaderV3
+struct BmpHeader
 {
 	uint16_t signature;
 	uint32_t fileSize;
@@ -282,7 +321,7 @@ struct BmpHeaderV3
 	uint32_t colorsImportant;
 };
 
-MemoryStreamWriter& operator<<(MemoryStreamWriter& s, BmpHeaderV3& bmp)
+MemoryStreamWriter& operator<<(MemoryStreamWriter& s, BmpHeader& bmp)
 {
 	s << bmp.signature;
 	s << bmp.fileSize;
@@ -306,7 +345,7 @@ MemoryStreamWriter& operator<<(MemoryStreamWriter& s, BmpHeaderV3& bmp)
 MemoryStreamWriter Exporter::ExportBmpIndexed(UTexture* tex)
 {
 	MemoryStreamWriter data;
-	BmpHeaderV3 hdr = { 0 };
+	BmpHeader hdr = { 0 };
 	int usize = tex->USize();
 	int vsize = tex->VSize();
 
@@ -319,7 +358,7 @@ MemoryStreamWriter Exporter::ExportBmpIndexed(UTexture* tex)
 
 	hdr.signature = 0x4d42;
 	hdr.fileSize = 0; // re-fill later
-	hdr.pixelOffset = sizeof(BmpHeaderV3) + (4 * 256);
+	hdr.pixelOffset = sizeof(BmpHeader) + (4 * 256);
 	hdr.dibHeaderSize = 40;
 	hdr.imageWidth = tex->USize();
 	hdr.imageHeight = tex->VSize();

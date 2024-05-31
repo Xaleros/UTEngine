@@ -32,6 +32,11 @@ void UFont::Load(ObjectStream* stream)
 	}
 }
 
+const std::vector<FontPage>& UFont::GetPages() const
+{
+	return pages;
+}
+
 FontGlyph UFont::GetGlyph(char c) const
 {
 	FontGlyph glyph = FindGlyph(c);
