@@ -375,6 +375,18 @@ MemoryStreamWriter Exporter::ExportSound(USound* sound)
 
 /////////////////////////////////////////////////////////////////////////////
 
+MemoryStreamWriter Exporter::ExportSkeletalAnim(UAnimation* anim)
+{
+	return MemoryStreamWriter();
+}
+
+MemoryStreamWriter Exporter::ExportSkeletalMesh(USkeletalMesh* mesh)
+{
+	return MemoryStreamWriter();
+}
+
+/////////////////////////////////////////////////////////////////////////////
+
 MemoryStreamWriter Exporter::ExportTexture(UTexture* tex, const std::string& ext)
 {
 	if (!tex)
