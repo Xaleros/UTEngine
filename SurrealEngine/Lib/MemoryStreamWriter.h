@@ -1,19 +1,19 @@
 #pragma once
 
 #include <cstdint>
-#include <cstring>
-#include <string>
 #include <vector>
 
 class MemoryStreamWriter
 {
 public:
 	MemoryStreamWriter(size_t len = 64);
+	MemoryStreamWriter(const std::vector<uint8_t>& buf);
 	MemoryStreamWriter(MemoryStreamWriter&& msw) noexcept;
 	~MemoryStreamWriter();
 
 	void Reserve(size_t capacity);
 	void Write(const void* buf, size_t size);
+	void Write(const std::vector<uint8_t>& buf);
 	void Seek(size_t pos, int base);
 	size_t Tell() const;
 

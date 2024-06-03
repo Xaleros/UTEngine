@@ -63,34 +63,29 @@ public:
 
 	std::string GetExportName(int objref);
 
-	template<class T> std::vector<T*> GetAllObjects()
+	template<typename T> 
+	std::vector<T*> GetAllObjects()
 	{
 		std::vector<T*> objects;
-		int objref = 1;
-		for (ExportTableEntry& e : ExportTable)
+		for (int objref = 1; objref < ExportTable.size(); objref++)
 		{
-			std::string className;
-			if (e.ObjClass < 0)
-			{
-				className = GetName(GetImportEntry(e.ObjClass)->ObjName).ToString();
-			}
-			else if (e.ObjClass != 0)
-			{
-				className = GetName(GetExportEntry(e.ObjClass)->ObjName).ToString();
-			}
-
-			// ignore "Groups", they're not real objects
-			if (className.compare("Package") != 0)
-			{
-				T* obj = dynamic_cast<T*>(GetUObject(objref));
-				if (obj)
-				{
-					objects.push_back(obj);
-				}
-			}
-			objref++;
+			T* obj = GetObjectIfType<T>(objref);
+			if (obj != nullptr)
+				objects.push_back(obj);
 		}
 		return objects;
+	}
+
+	template<typename T>
+	bool HasObjectOfType()
+	{
+		for (int objref = 1; objref < ExportTable.size(); objref++)
+		{
+			if (GetObjectIfType<T>(objref) != nullptr)
+				return true;
+		}
+
+		return false;
 	}
 
 private:
@@ -131,6 +126,29 @@ private:
 				ExportTable.push_back(entry);
 			}
 		}
+	}
+
+	template<typename T>
+	T* GetObjectIfType(int objref)
+	{
+		ExportTableEntry& e = ExportTable[objref];
+		std::string className;
+		if (e.ObjClass < 0)
+		{
+			className = GetName(GetImportEntry(e.ObjClass)->ObjName).ToString();
+		}
+		else if (e.ObjClass != 0)
+		{
+			className = GetName(GetExportEntry(e.ObjClass)->ObjName).ToString();
+		}
+
+		// ignore "Groups", they're not real objects
+		if (className.compare("Package") != 0)
+		{
+			return dynamic_cast<T*>(GetUObject(objref));
+		}
+
+		return nullptr;
 	}
 
 	PackageManager* Packages = nullptr;

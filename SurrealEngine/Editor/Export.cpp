@@ -97,7 +97,280 @@ MemoryStreamWriter Exporter::ExportFont(UFont* font)
 	}
 
 	text << "END OBJECT\r\n";
-	return std::move(text);
+	return text;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+
+// "James Mesh Types"
+// https://paulbourke.net/dataformats/unreal/
+enum JmtFlags
+{
+	Normal = 0,
+	TwoSided = 1,
+	Translucent = 2,
+	MaskedTwoSided = 3,
+	ModulatedTwoSided = 4,
+	WeaponTriangle = 8
+};
+
+struct U3DAnivHeader
+{
+	uint16_t NumFrames;
+	uint16_t FrameSize;
+};
+
+struct U3DDataHeader
+{
+	uint16_t NumPolygons;
+	uint16_t NumVertices;
+	uint16_t BogusRot;
+	uint16_t BogusFrame;
+	uint32_t BogusNormX;
+	uint32_t BogusNormY;
+	uint32_t BogusNormZ;
+	uint32_t FixScale;
+	uint32_t Unused[3];
+	uint8_t Unknown[12];
+};
+
+struct U3DDataTriangle
+{
+	uint16_t Vertex[3];
+	int8_t Type;
+	int8_t Color;
+	uint8_t VertexUV[3][2];
+	int8_t TexNum;
+	int8_t Flags; // unused
+};
+
+MemoryStreamWriter& operator<<(MemoryStreamWriter& s, U3DAnivHeader& hdr)
+{
+	s << hdr.NumFrames;
+	s << hdr.FrameSize;
+	return s;
+}
+
+MemoryStreamWriter& operator<<(MemoryStreamWriter& s, U3DDataHeader& hdr)
+{
+	s << hdr.NumPolygons;
+	s << hdr.NumVertices;
+	s << hdr.BogusRot;
+	s << hdr.BogusFrame;
+	s << hdr.BogusNormX;
+	s << hdr.BogusNormY;
+	s << hdr.BogusNormZ;
+	s << hdr.FixScale;
+
+	for (int i = 0; i < sizeof(hdr.Unused) / sizeof(hdr.Unused[0]); i++)
+	{
+		s << hdr.Unused[i];
+	}
+
+	for (int i = 0; i < sizeof(hdr.Unknown) / sizeof(hdr.Unknown[0]); i++)
+	{
+		s << hdr.Unknown[i];
+	}
+
+	return s;
+}
+
+MemoryStreamWriter& operator<<(MemoryStreamWriter& s, U3DDataTriangle& tri)
+{
+	for (int i = 0; i < sizeof(tri.Vertex) / sizeof(tri.Vertex[0]); i++)
+	{
+		s << tri.Vertex[i];
+	}
+
+	s << tri.Type;
+	s << tri.Color;
+	s.Write(tri.VertexUV, sizeof(tri.VertexUV));
+	s << tri.TexNum;
+	s << tri.Flags;
+
+	return s;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+
+MemoryStreamWriter Exporter::ExportMeshAnim(UMesh* mesh)
+{
+	MemoryStreamWriter data;
+
+	if (!mesh)
+	{
+		return data;
+	}
+
+	const std::string& className = mesh->Class->Name.ToString();
+	if (className.compare("SkeletalMesh") == 0)
+	{
+		return data;
+	}
+
+	U3DAnivHeader hdr;
+	hdr.NumFrames = mesh->AnimFrames;
+	hdr.FrameSize = mesh->FrameVerts * 4;
+	data << hdr;
+
+	uint32_t uvtx;
+	for (int i = 0; i < mesh->AnimFrames; i++)
+	{
+		for (int k = 0; k < mesh->FrameVerts; k++)
+		{
+			size_t index = (size_t)((i * mesh->FrameVerts) + k);
+			vec3& vtx = mesh->Verts[index];
+			uvtx = ((int)(-vtx.x * 8.0) & 0x7ff) | (((int)(-vtx.y * 8.0) & 0x7ff) << 11) | (((int)(vtx.z * 4.0) & 0x3ff) << 22);
+			data << uvtx;
+		}
+	}
+
+	return data;
+}
+
+MemoryStreamWriter Exporter::ExportMeshData(UMesh* mesh)
+{
+	MemoryStreamWriter data;
+	if (!mesh)
+	{
+		return data;
+	}
+
+	const std::string& className = mesh->Class->Name.ToString();
+	if (className.compare("LodMesh") == 0)
+	{
+		return ExportLodMesh(reinterpret_cast<ULodMesh*>(mesh));
+	}
+	if (className.compare("SkeletalMesh") == 0)
+	{
+		return ExportSkeletalMesh(reinterpret_cast<USkeletalMesh*>(mesh));
+	}
+
+	U3DDataHeader hdr;
+	size_t numPolygons = mesh->Tris.size();
+	if (numPolygons > UINT16_MAX)
+	{
+		Exception::Throw("Too many triangles (" + std::to_string(numPolygons) + ") to export in " + mesh->Name.ToString());
+	}
+
+	hdr.NumPolygons = static_cast<uint16_t>(numPolygons);
+	hdr.NumVertices = mesh->FrameVerts;
+	data << hdr;
+
+	U3DDataTriangle tri;
+	for (MeshTri& mt : mesh->Tris)
+	{
+		for (int i = 0; i < 3; i++)
+		{
+			tri.Vertex[i] = mt.Indices[i];
+			tri.VertexUV[i][0] = mt.UV[i].s;
+			tri.VertexUV[i][1] = mt.UV[i].t;
+		}
+
+		if (mt.PolyFlags & PF_TwoSided)
+		{
+			if (mt.PolyFlags & PF_Modulated)
+				tri.Type = JmtFlags::ModulatedTwoSided;
+			else if (mt.PolyFlags & PF_Masked)
+				tri.Type = JmtFlags::MaskedTwoSided;
+			else if (mt.PolyFlags & PF_Translucent)
+				tri.Type = JmtFlags::Translucent;
+			else
+				tri.Type = JmtFlags::TwoSided;
+		}
+		else
+		{
+			tri.Type = JmtFlags::Normal;
+		}
+
+		tri.Color = 127; // TODO: not sure what this should be
+		tri.TexNum = mt.TextureIndex;
+		tri.Flags = 0;
+
+		data << tri;
+	}
+
+	return data;
+}
+
+MemoryStreamWriter Exporter::ExportLodMesh(ULodMesh* mesh)
+{
+	MemoryStreamWriter data;
+
+	U3DDataHeader hdr;
+	size_t numPolygons = mesh->Faces.size();
+	if (numPolygons > UINT16_MAX)
+	{
+		Exception::Throw("Too many triangles (" + std::to_string(numPolygons) + ") to export in " + mesh->Name.ToString());
+	}
+
+	hdr.NumPolygons = static_cast<uint16_t>(numPolygons);
+	hdr.NumVertices = mesh->FrameVerts;
+	data << hdr;
+
+	U3DDataTriangle tri;
+	for (int i = 0; i < numPolygons; i++)
+	{
+		MeshFace& face = mesh->Faces[i];
+		for (int k = 0; k < 3; k++)
+		{
+			MeshWedge& wedge = mesh->Wedges[face.Indices[k]];
+			tri.Vertex[k] = wedge.Vertex;
+			tri.VertexUV[k][0] = wedge.U;
+			tri.VertexUV[k][1] = wedge.V;
+		}
+
+		MeshMaterial& mat = mesh->Materials[face.MaterialIndex];
+		if (mesh->SpecialFaces.size() == 1 && i == mesh->Faces.size() - 1)
+		{
+			tri.Type = JmtFlags::WeaponTriangle;
+		}
+		else if (mat.PolyFlags & PF_TwoSided)
+		{
+			if (mat.PolyFlags & PF_Modulated)
+				tri.Type = JmtFlags::ModulatedTwoSided;
+			else if (mat.PolyFlags & PF_Masked)
+				tri.Type = JmtFlags::MaskedTwoSided;
+			else if (mat.PolyFlags & PF_Translucent)
+				tri.Type = JmtFlags::Translucent;
+			else
+				tri.Type = JmtFlags::TwoSided;
+		}
+		else
+		{
+			tri.Type = JmtFlags::Normal;
+		}
+
+		tri.Color = 127; // TODO: not sure what this should be
+		tri.TexNum = mat.TextureIndex;
+		tri.Flags = 0;
+
+		data << tri;
+	}
+
+	return data;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+
+MemoryStreamWriter Exporter::ExportMusic(UMusic* music)
+{
+	if (!music)
+		return MemoryStreamWriter();
+
+	return MemoryStreamWriter(music->Data);
+}
+
+/////////////////////////////////////////////////////////////////////////////
+
+MemoryStreamWriter Exporter::ExportSound(USound* sound)
+{
+	MemoryStreamWriter data;
+
+	if (!sound)
+		return MemoryStreamWriter();
+
+	return MemoryStreamWriter(sound->Data);
 }
 
 /////////////////////////////////////////////////////////////////////////////

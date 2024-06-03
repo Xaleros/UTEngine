@@ -18,6 +18,12 @@ MemoryStreamWriter::MemoryStreamWriter(size_t len)
 	pos = 0;
 }
 
+MemoryStreamWriter::MemoryStreamWriter(const std::vector<uint8_t>& buf)
+{
+	data = buf;
+	pos = 0;
+}
+
 MemoryStreamWriter::MemoryStreamWriter(MemoryStreamWriter&& msw) noexcept
 {
 	data = std::move(msw.data);
@@ -49,6 +55,11 @@ void MemoryStreamWriter::Write(const void* buf, size_t size)
 		}
 		pos++;
 	}
+}
+
+void MemoryStreamWriter::Write(const std::vector<uint8_t>& buf)
+{
+	data.insert(data.begin() + pos, buf.begin(), buf.end());
 }
 
 void MemoryStreamWriter::Seek(size_t newpos, int base)

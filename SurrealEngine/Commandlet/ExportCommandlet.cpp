@@ -147,8 +147,7 @@ void ExportCommandlet::ExportScripts(DebuggerApp* console, std::vector<std::stri
 			continue;
 
 		Package* package = engine->packages->GetPackage(pkgname);
-		std::vector<UClass*> classes = package->GetAllObjects<UClass>();
-		if (!classes.empty())
+		if (package->HasObjectOfType<UClass>())
 			packageObjects.push_back(PackageNamePair(package, pkgname));
 	}
 	
@@ -165,7 +164,7 @@ void ExportCommandlet::ExportScripts(DebuggerApp* console, std::vector<std::stri
 
 		std::string pkgname = package->GetPackageName().ToString();
 		std::string pkgpath = FilePath::combine(engine->LaunchInfo.gameRootFolder, name);
-		std::string classespath = FilePath::combine(pkgpath, "Classes");
+		std::string path = FilePath::combine(pkgpath, "Classes");
 		bool pkgpathcreated = false;
 
 		console->WriteOutput("Exporting scripts from " + ColorEscape(96) + name + ResetEscape() + NewLine());
@@ -180,10 +179,10 @@ void ExportCommandlet::ExportScripts(DebuggerApp* console, std::vector<std::stri
 				if (!pkgpathcreated)
 				{
 					Directory::make_directory(pkgpath);
-					Directory::make_directory(classespath);
+					Directory::make_directory(path);
 					pkgpathcreated = true;
 				}
-				std::string filename = FilePath::combine(classespath, cls->FriendlyName.ToString() + ".uc");
+				std::string filename = FilePath::combine(path, cls->FriendlyName.ToString() + ".uc");
 				File::write_all_bytes(filename, stream.Data(), stream.Size());
 			}
 		}
@@ -213,8 +212,7 @@ void ExportCommandlet::ExportTextures(DebuggerApp* console, std::vector<std::str
 			continue;
 
 		Package* package = engine->packages->GetPackage(pkgname);
-		std::vector<UTexture*> objects = package->GetAllObjects<UTexture>();
-		if (!objects.empty())
+		if (package->HasObjectOfType<UTexture>())
 			packageObjects.push_back(PackageNamePair(package, pkgname));
 	}
 
@@ -299,7 +297,7 @@ void ExportCommandlet::ExportFonts(DebuggerApp* console, std::vector<std::string
 	if (packages.size() == 0)
 		console->WriteOutput("Checking all packages..." + NewLine());
 
-	// cull out packages without textures
+	// cull out packages without fonts
 	std::vector<PackageNamePair> packageObjects;
 	for (std::string pkgname : packageNames)
 	{
@@ -307,8 +305,7 @@ void ExportCommandlet::ExportFonts(DebuggerApp* console, std::vector<std::string
 			continue;
 
 		Package* package = engine->packages->GetPackage(pkgname);
-		std::vector<UFont*> objects = package->GetAllObjects<UFont>();
-		if (!objects.empty())
+		if (package->HasObjectOfType<UFont>())
 			packageObjects.push_back(PackageNamePair(package, pkgname));
 	}
 
@@ -351,7 +348,7 @@ void ExportCommandlet::ExportFonts(DebuggerApp* console, std::vector<std::string
 
 		std::string pkgname = package->GetPackageName().ToString();
 		std::string pkgpath = FilePath::combine(engine->LaunchInfo.gameRootFolder, name);
-		std::string texturespath = FilePath::combine(pkgpath, "Fonts");
+		std::string path = FilePath::combine(pkgpath, "Fonts");
 		bool pkgpathcreated = false;
 
 		console->WriteOutput("Exporting fonts from " + ColorEscape(96) + name + ResetEscape() + NewLine());
@@ -366,18 +363,18 @@ void ExportCommandlet::ExportFonts(DebuggerApp* console, std::vector<std::string
 				if (!pkgpathcreated)
 				{
 					Directory::make_directory(pkgpath);
-					Directory::make_directory(texturespath);
+					Directory::make_directory(path);
 					pkgpathcreated = true;
 				}
 
-				std::string filename = FilePath::combine(texturespath, font->Name.ToString() + ".ufnt");
+				std::string filename = FilePath::combine(path, font->Name.ToString() + ".ufnt");
 				File::write_all_bytes(filename, stream.Data(), stream.Size());
 
 				const std::vector<FontPage>& pages = font->GetPages();
 				for (const FontPage& page : pages)
 				{
 					MemoryStreamWriter texstream = Exporter::ExportTexture(page.Texture, desiredExt);
-					filename = FilePath::combine(texturespath, page.Texture->Name.ToString() + "." + desiredExt);
+					filename = FilePath::combine(path, page.Texture->Name.ToString() + "." + desiredExt);
 					File::write_all_bytes(filename, texstream.Data(), texstream.Size());
 				}
 			}
@@ -389,21 +386,226 @@ void ExportCommandlet::ExportFonts(DebuggerApp* console, std::vector<std::string
 
 void ExportCommandlet::ExportSounds(DebuggerApp* console, std::vector<std::string>& packages)
 {
-	console->WriteOutput("Unimplemented" + NewLine());
+	InitExport(packages);
+
+	if (packages.size() == 0)
+		console->WriteOutput("Checking all packages..." + NewLine());
+
+	// cull out packages without sounds
+	std::vector<PackageNamePair> packageObjects;
+	for (std::string pkgname : packageNames)
+	{
+		if (pkgname == "Editor")
+			continue;
+
+		Package* package = engine->packages->GetPackage(pkgname);
+		if (package->HasObjectOfType<USound>())
+			packageObjects.push_back(PackageNamePair(package, pkgname));
+	}
+
+	if (packageObjects.size() == 0)
+	{
+		console->WriteOutput("No sounds found" + NewLine());
+		return;
+	}
+
+	for (PackageNamePair& pkgobject : packageObjects)
+	{
+		Package* package = pkgobject.first;
+		std::string& name = pkgobject.second;
+
+		std::string pkgname = package->GetPackageName().ToString();
+		std::string pkgpath = FilePath::combine(engine->LaunchInfo.gameRootFolder, name);
+		std::string path = FilePath::combine(pkgpath, "Sounds");
+		bool pkgpathcreated = false;
+
+		console->WriteOutput("Exporting sounds from " + ColorEscape(96) + name + ResetEscape() + NewLine());
+
+		std::vector<USound*> sounds = package->GetAllObjects<USound>();
+
+		for (USound* sound : sounds)
+		{
+			MemoryStreamWriter stream = Exporter::ExportSound(sound);
+			if (stream.Size() > 0)
+			{
+				if (!pkgpathcreated)
+				{
+					Directory::make_directory(pkgpath);
+					Directory::make_directory(path);
+					pkgpathcreated = true;
+				}
+
+				std::string filename = FilePath::combine(path, sound->Name.ToString() + "." + sound->Format.ToString());
+				File::write_all_bytes(filename, stream.Data(), stream.Size());
+			}
+		}
+	}
 }
 
 /////////////////////////////////////////////////////////////////////////////
 
 void ExportCommandlet::ExportMusic(DebuggerApp* console, std::vector<std::string>& packages)
 {
-	console->WriteOutput("Unimplemented" + NewLine());
+	InitExport(packages);
+
+	if (packages.size() == 0)
+		console->WriteOutput("Checking all packages..." + NewLine());
+
+	// cull out packages without music
+	std::vector<PackageNamePair> packageObjects;
+	for (std::string pkgname : packageNames)
+	{
+		if (pkgname == "Editor")
+			continue;
+
+		Package* package = engine->packages->GetPackage(pkgname);
+		if (package->HasObjectOfType<UMusic>())
+			packageObjects.push_back(PackageNamePair(package, pkgname));
+	}
+
+	if (packageObjects.size() == 0)
+	{
+		console->WriteOutput("No music found" + NewLine());
+		return;
+	}
+
+	for (PackageNamePair& pkgobject : packageObjects)
+	{
+		Package* package = pkgobject.first;
+		std::string& name = pkgobject.second;
+
+		std::string pkgname = package->GetPackageName().ToString();
+		std::string pkgpath = FilePath::combine(engine->LaunchInfo.gameRootFolder, name);
+		std::string path = FilePath::combine(pkgpath, "Music");
+		bool pkgpathcreated = false;
+
+		console->WriteOutput("Exporting music from " + ColorEscape(96) + name + ResetEscape() + NewLine());
+
+		std::vector<UMusic*> musics = package->GetAllObjects<UMusic>();
+
+		for (UMusic* music : musics)
+		{
+			MemoryStreamWriter stream = Exporter::ExportMusic(music);
+			if (stream.Size() > 0)
+			{
+				if (!pkgpathcreated)
+				{
+					Directory::make_directory(pkgpath);
+					Directory::make_directory(path);
+					pkgpathcreated = true;
+				}
+
+				std::string filename = FilePath::combine(path, music->Name.ToString() + "." + music->Format.ToString());
+				File::write_all_bytes(filename, stream.Data(), stream.Size());
+			}
+		}
+	}
 }
 
 /////////////////////////////////////////////////////////////////////////////
 
 void ExportCommandlet::ExportMeshes(DebuggerApp* console, std::vector<std::string>& packages)
 {
-	console->WriteOutput("Unimplemented" + NewLine());
+	InitExport(packages);
+
+	if (packages.size() == 0)
+		console->WriteOutput("Checking all packages..." + NewLine());
+
+	// cull out packages without meshes/animations
+	std::vector<PackageNamePair> packageObjects;
+	for (std::string pkgname : packageNames)
+	{
+		if (pkgname == "Editor")
+			continue;
+
+		Package* package = engine->packages->GetPackage(pkgname);
+		if (package->HasObjectOfType<UMesh>())
+			packageObjects.push_back(PackageNamePair(package, pkgname));
+	}
+
+	if (packageObjects.size() == 0)
+	{
+		console->WriteOutput("No meshes/animation found" + NewLine());
+		return;
+	}
+
+	for (PackageNamePair& pkgobject : packageObjects)
+	{
+		Package* package = pkgobject.first;
+		std::string& name = pkgobject.second;
+
+		std::string pkgname = package->GetPackageName().ToString();
+		std::string pkgpath = FilePath::combine(engine->LaunchInfo.gameRootFolder, name);
+		std::string path = FilePath::combine(pkgpath, "Meshes");
+		bool pkgpathcreated = false;
+
+		console->WriteOutput("Exporting meshes/animation from " + ColorEscape(96) + name + ResetEscape() + NewLine());
+
+		std::vector<UMesh*> meshes = package->GetAllObjects<UMesh>();
+
+		for (UMesh* mesh : meshes)
+		{
+			std::string dataExt = "_d.3d";
+			if (mesh->IsA("SkeletalMesh"))
+			{
+				// Skip animation export for now
+				dataExt = "psk";
+			}
+			else
+			{
+				// Export vertex animations
+				MemoryStreamWriter animstream = Exporter::ExportMeshAnim(mesh);
+				if (animstream.Size() > 0)
+				{
+					if (!pkgpathcreated)
+					{
+						Directory::make_directory(pkgpath);
+						Directory::make_directory(path);
+						pkgpathcreated = true;
+					}
+
+					std::string filename = FilePath::combine(path, mesh->Name.ToString() + "_a.3d");
+					File::write_all_bytes(filename, animstream.Data(), animstream.Size());
+				}
+			}
+
+			MemoryStreamWriter datastream = Exporter::ExportMeshData(mesh);
+			if (datastream.Size() > 0)
+			{
+				if (!pkgpathcreated)
+				{
+					Directory::make_directory(pkgpath);
+					Directory::make_directory(path);
+					pkgpathcreated = true;
+				}
+
+				std::string filename = FilePath::combine(path, mesh->Name.ToString() + dataExt);
+				File::write_all_bytes(filename, datastream.Data(), datastream.Size());
+			}
+		}
+
+		std::vector<UAnimation*> skeletalAnims = package->GetAllObjects<UAnimation>();
+		if (skeletalAnims.size() > 0)
+		{
+			for (UAnimation* anim : skeletalAnims)
+			{
+				// Export skeletal animations
+				MemoryStreamWriter stream = Exporter::ExportSkeletalAnim(anim);
+				if (stream.Size() > 0)
+				{
+					if (!pkgpathcreated)
+					{
+						Directory::make_directory(pkgpath);
+						Directory::make_directory(path);
+						pkgpathcreated = true;
+					}
+
+					std::string filename = FilePath::combine(path, anim->Name.ToString() + ".psa");
+					File::write_all_bytes(filename, stream.Data(), stream.Size());
+				}
+			}
+		}
+	}
 }
 
 /////////////////////////////////////////////////////////////////////////////
