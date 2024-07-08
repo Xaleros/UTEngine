@@ -4,9 +4,13 @@
 #include <string>
 #include <functional>
 #include <cstdint>
+#include <cstdlib>
 #include "../core/rect.h"
 
-class Engine;
+class Widget;
+class OpenFileDialog;
+class SaveFileDialog;
+class OpenFolderDialog;
 
 enum class StandardCursor
 {
@@ -171,4 +175,39 @@ public:
 	virtual void SetClipboardText(const std::string& text) = 0;
 
 	virtual void* GetNativeHandle() = 0;
+};
+
+class DisplayBackend
+{
+public:
+	static DisplayBackend* Get();
+	static void Set(std::unique_ptr<DisplayBackend> instance);
+
+	static std::unique_ptr<DisplayBackend> TryCreateWin32();
+	static std::unique_ptr<DisplayBackend> TryCreateSDL2();
+	static std::unique_ptr<DisplayBackend> TryCreateX11();
+	static std::unique_ptr<DisplayBackend> TryCreateWayland();
+
+	static std::unique_ptr<DisplayBackend> TryCreateBackend();
+
+	virtual ~DisplayBackend() = default;
+
+	virtual bool IsWin32() { return false; }
+	virtual bool IsSDL2() { return false; }
+	virtual bool IsX11() { return false; }
+	virtual bool IsWayland() { return false; }
+
+	virtual std::unique_ptr<DisplayWindow> Create(DisplayWindowHost* windowHost, bool popupWindow, DisplayWindow* owner) = 0;
+	virtual void ProcessEvents() = 0;
+	virtual void RunLoop() = 0;
+	virtual void ExitLoop() = 0;
+
+	virtual void* StartTimer(int timeoutMilliseconds, std::function<void()> onTimer) = 0;
+	virtual void StopTimer(void* timerID) = 0;
+
+	virtual Size GetScreenSize() = 0;
+
+	virtual std::unique_ptr<OpenFileDialog> CreateOpenFileDialog(DisplayWindow* owner);
+	virtual std::unique_ptr<SaveFileDialog> CreateSaveFileDialog(DisplayWindow* owner);
+	virtual std::unique_ptr<OpenFolderDialog> CreateOpenFolderDialog(DisplayWindow* owner);
 };

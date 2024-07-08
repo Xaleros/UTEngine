@@ -32,7 +32,7 @@ void UFont::Load(ObjectStream* stream)
 	}
 }
 
-const std::vector<FontPage>& UFont::GetPages() const
+const Array<FontPage>& UFont::GetPages() const
 {
 	return pages;
 }

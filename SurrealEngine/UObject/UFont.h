@@ -17,7 +17,7 @@ class FontPage
 {
 public:
 	UTexture* Texture = nullptr;
-	std::vector<FontCharacter> Characters;
+	Array<FontCharacter> Characters;
 };
 
 class FontGlyph
@@ -40,11 +40,11 @@ public:
 	void Load(ObjectStream* stream) override;
 
 	FontGlyph GetGlyph(char c) const;
-	const std::vector<FontPage>& GetPages() const;
+	const Array<FontPage>& GetPages() const;
 
 private:
 	FontGlyph FindGlyph(char c) const;
 
-	std::vector<FontPage> pages;
+	Array<FontPage> pages;
 	int charactersPerPage;
 };

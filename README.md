@@ -14,15 +14,15 @@ At the time of this writing, SurrealEngine can detect the following UE1 games:
 
 * Unreal Tournament (v436, v451b, v469(a, b, c, d))
 * Unreal (v200, v209, v220, v224v, v225f, v226f)
-* Unreal Gold (v226b, v227(i, j))
+* Unreal Gold (v226b, v227(i, j, k_11))
 * Deus Ex (v1002f, v1112fm)
 * Klingon Honor Guard (219)
 * NERF Arena Blast (v300)
 * TNN Outdoors Pro Hunter (v200)
 * Rune Classic (v1.10)
+* Clive Barker's Undying (v420)
 * Tactical-Ops: Assault on Terror (v3.4.0 and v3.5.0 - both running under UT436 and UT469 engines)
-
-Clive Barker's Undying (v420) is also in the database, but there is no corresponding SHA1sum for its executable file yet.
+* Wheel of Time (v333)
 
 From the list above, only Unreal Tournament v436 and Unreal Gold v226 is in a relatively playable state. Running any other game (and UT versions) can and will result in crashes.
 
@@ -75,6 +75,7 @@ You'll need the dev packages for the following things:
 * dl
 * alsa (libasound2)
 * SDL2
+* waylandpp (optional) (C++ bindings for Wayland, used on ZWidget Wayland backend)
 
 On Linux, SDL2 is required, as SurrealEngine will utilise it for its windowing functionalities and native Wayland support (with `SDL_VIDEODRIVER=wayland`).
 
