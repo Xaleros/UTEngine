@@ -40,6 +40,8 @@ WaylandDisplayWindow::WaylandDisplayWindow(DisplayWindowHost* windowHost, bool p
             s_waylandRegistry.bind(name, m_XDGActivation, 1);
         if (interface == wayland::zxdg_decoration_manager_v1_t::interface_name)
             s_waylandRegistry.bind(name, m_XDGDecorationManager, 1);
+        if (interface == wayland::fractional_scale_manager_v1_t::interface_name)
+            s_waylandRegistry.bind(name, m_FractionalScaleManager, 1);
     };
 
     s_waylandDisplay.roundtrip();
@@ -61,6 +63,28 @@ WaylandDisplayWindow::WaylandDisplayWindow(DisplayWindowHost* windowHost, bool p
     m_waylandOutput.on_mode() = [&] (wayland::output_mode flags, int32_t width, int32_t height, int32_t refresh) {
         s_ScreenSize = Size(width, height);
     };
+
+    if (m_FractionalScaleManager)
+    {
+        m_FractionalScale = m_FractionalScaleManager.get_fractional_scale(m_AppSurface);
+
+        m_FractionalScale.on_preferred_scale() = [&](uint32_t scale_numerator) {
+            // parameter is the numerator of a fraction with the denominator of 120
+            m_ScaleFactor = scale_numerator / 120.0;
+
+            m_NeedsUpdate = true;
+            windowHost->OnWindowDpiScaleChanged();
+        };
+    }
+    else
+    {
+        m_waylandOutput.on_scale() = [&] (int32_t scale) {
+            m_ScaleFactor = scale;
+            m_NeedsUpdate = true;
+            windowHost->OnWindowDpiScaleChanged();
+        };
+    }
+
 /*
     m_DataDevice = m_DataDeviceManager.get_data_device(m_waylandSeat);
 
@@ -175,27 +199,18 @@ void WaylandDisplayWindow::InitializeToplevel()
         windowHost->OnWindowGeometryChanged();
     };
 
-    m_waylandOutput.on_scale() = [&] (int32_t scale) {
-        m_ScaleFactor = scale;
-        m_NeedsUpdate = true;
-        windowHost->OnWindowDpiScaleChanged();
-    };
-
     m_AppSurface.commit();
 
     s_waylandDisplay.roundtrip();
 
     // These have to be added after the roundtrip
-    if (m_XDGToplevel)
-    {
-        m_XDGToplevel.on_configure() = [&] (int32_t width, int32_t height, wayland::array_t states) {
-            OnXDGToplevelConfigureEvent(width, height);
-        };
+    m_XDGToplevel.on_configure() = [&] (int32_t width, int32_t height, wayland::array_t states) {
+        OnXDGToplevelConfigureEvent(width, height);
+    };
 
-        m_XDGToplevel.on_close() = [&] () {
-            OnExitEvent();
-        };
-    }
+    m_XDGToplevel.on_close() = [&] () {
+        OnExitEvent();
+    };
 
     if (!hasKeyboard)
         throw std::runtime_error("No keyboard detected!");
@@ -509,7 +524,7 @@ Rect WaylandDisplayWindow::GetWindowFrame() const
 
 Size WaylandDisplayWindow::GetClientSize() const
 {
-    return m_WindowSize;
+    return m_WindowSize / m_ScaleFactor;
 }
 
 int WaylandDisplayWindow::GetPixelWidth() const
@@ -563,12 +578,12 @@ void WaylandDisplayWindow::SetClipboardText(const std::string& text)
 
 Point WaylandDisplayWindow::MapFromGlobal(const Point& pos) const
 {
-    return pos - m_WindowGlobalPos;
+    return (pos - m_WindowGlobalPos) / m_ScaleFactor;
 }
 
 Point WaylandDisplayWindow::MapToGlobal(const Point& pos) const
 {
-    return m_WindowGlobalPos + pos;
+    return (m_WindowGlobalPos + pos) / m_ScaleFactor;
 }
 
 void WaylandDisplayWindow::ProcessEvents()
@@ -636,8 +651,8 @@ void WaylandDisplayWindow::UpdateTimers()
 void WaylandDisplayWindow::OnXDGToplevelConfigureEvent(int32_t width, int32_t height)
 {
     Rect rect = GetWindowFrame();
-    rect.width = width;
-    rect.height = height;
+    rect.width = width / m_ScaleFactor;
+    rect.height = height / m_ScaleFactor;
     SetWindowFrame(rect);
     windowHost->OnWindowGeometryChanged();
 }
@@ -716,7 +731,7 @@ void WaylandDisplayWindow::OnMouseReleaseEvent(InputKey button)
 
 void WaylandDisplayWindow::OnMouseMoveEvent(Point surfacePos)
 {
-    m_SurfaceMousePos = surfacePos;
+    m_SurfaceMousePos = surfacePos / m_ScaleFactor;
     windowHost->OnWindowMouseMove(m_SurfaceMousePos);
 }
 
@@ -752,12 +767,15 @@ void WaylandDisplayWindow::CreateBuffers(int32_t width, int32_t height)
     if (shared_mem)
         shared_mem.reset();
 
-    shared_mem = std::make_shared<SharedMemHelper>(width * height * 4);
-    auto pool = m_waylandSHM.create_pool(shared_mem->get_fd(), width * height * 4);
+    int scaled_width = width * m_ScaleFactor;
+    int scaled_height  = height * m_ScaleFactor;
 
-    m_AppSurfaceBuffer = pool.create_buffer(0, width, height, width * 4, wayland::shm_format::xrgb8888);
+    shared_mem = std::make_shared<SharedMemHelper>(scaled_width * scaled_height * 4);
+    auto pool = m_waylandSHM.create_pool(shared_mem->get_fd(), scaled_width * scaled_height * 4);
 
-    m_WindowSize = Size(width, height);
+    m_AppSurfaceBuffer = pool.create_buffer(0, scaled_width, scaled_height, scaled_width * 4, wayland::shm_format::xrgb8888);
+
+    m_WindowSize = Size(scaled_width, scaled_height);
 }
 
 std::string WaylandDisplayWindow::GetWaylandCursorName(StandardCursor cursor)
