@@ -22,23 +22,23 @@ class SePackagePrinter(SeValuePrinter):
 
 class SeVec2TPrinter(SeValuePrinter):
     def to_string(self):
-        return "{x =" + str(self.val['x']) + ", y = " + str(self.val['y']) + "}"
+        return "{x = " + str(self.val['x']) + ", y = " + str(self.val['y']) + "}"
 
 class SeVec3TPrinter(SeValuePrinter):
     def to_string(self):
-        return "{x =" + str(self.val['x']) + ", y = " + str(self.val['y']) + ", z = " + str(self.val['z']) + "}"
+        return "{x = " + str(self.val['x']) + ", y = " + str(self.val['y']) + ", z = " + str(self.val['z']) + "}"
 
 class SeVec4TPrinter(SeValuePrinter):
     def to_string(self):
-        return "{x =" + str(self.val['x']) + ", y = " + str(self.val['y']) + ", z = " + str(self.val['z']) + ", w = " + str(self.val['w']) + "}"
+        return "{x = " + str(self.val['x']) + ", y = " + str(self.val['y']) + ", z = " + str(self.val['z']) + ", w = " + str(self.val['w']) + "}"
 
 class SeColorPrinter(SeValuePrinter):
     def to_string(self):
-        return "{R =" + str(self.val['R']) + ", G = " + str(self.val['G']) + ", B = " + str(self.val['B']) + ", A = " + str(self.val['A']) + "}"
+        return "{R = " + str(self.val['R']) + ", G = " + str(self.val['G']) + ", B = " + str(self.val['B']) + ", A = " + str(self.val['A']) + "}"
 
 class SeRotatorPrinter(SeValuePrinter):
     def to_string(self):
-        return "{Pitch =" + str(self.val['Pitch']) + ", Yaw = " + str(self.val['Yaw']) + ", Roll = " + str(self.val['Roll']) + "}"
+        return "{Pitch = " + str(self.val['Pitch']) + ", Yaw = " + str(self.val['Yaw']) + ", Roll = " + str(self.val['Roll']) + "}"
 
 ###################################################################################################
 # UObject printers
@@ -101,14 +101,14 @@ class SeUClassPrinter(SeUStructPrinter):
 
 def BuildSurrealEnginePrettyPrinter():
     pp = gdb.printing.RegexpCollectionPrettyPrinter("SurrealEngine")
-    pp.add_printer('Array',      '^Array<*>$',   SeArrayPrinter)
+    pp.add_printer('Array',      'Array<.*>$',   SeArrayPrinter)
     pp.add_printer('Color',      '^Color$',      SeColorPrinter)
     pp.add_printer('NameString', '^NameString$', SeNameStringPrinter)
     pp.add_printer('Package',    '^Package$',    SeNameStringPrinter)
     pp.add_printer('Rotator',    '^Rotator$',    SeRotatorPrinter)
-    pp.add_printer('vec2T',      '^vec2T<*>$',   SeVec2TPrinter)
-    pp.add_printer('vec3T',      '^vec3T<*>$',   SeVec3TPrinter)
-    pp.add_printer('vec4T',      '^vec4T<*>$',   SeVec4TPrinter)
+    pp.add_printer('vec2T',      'vec2T<.*>$',   SeVec2TPrinter)
+    pp.add_printer('vec3T',      'vec3T<.*>$',   SeVec3TPrinter)
+    pp.add_printer('vec4T',      'vec4T<.*>$',   SeVec4TPrinter)
 
     pp.add_printer('UObject',   '^UObject$',   SeUObjectPrinter)
     pp.add_printer('UField',    '^UField$',    SeUFieldPrinter)
